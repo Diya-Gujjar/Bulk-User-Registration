@@ -62,67 +62,6 @@ app.post("/api/registerUser", (req, res) => {
  * Downloads Excel, parses users, calls /api/registerUser for each
  */
 
-// app.post("/register-bulk", async (req, res) => {
-//   // Optional: accept filename from body, default to DEMO.xlsx
-//   const fileName = req.body.fileName || "DEMO.xlsx";
-//   const filePath = path.join(__dirname, fileName);
-
-//   // Check if file exists
-//   if (!fs.existsSync(filePath)) {
-//     return res.status(400).json({ error: `File not found: ${fileName}` });
-//   }
-
-//   try {
-//     // Read Excel from local file
-//     const workbook = xlsx.readFile(filePath);
-//     const sheetName = workbook.SheetNames[0];
-//     const sheet = workbook.Sheets[sheetName];
-//     const data = xlsx.utils.sheet_to_json(sheet);
-
-//     const registeredUsers = [];
-
-//     for (const row of data) {
-//       const name = row["Name"];
-//       const email = row["Email"];
-//       const phone = row["Phone"];
-
-//       if (!name) continue;
-
-//       const hasValidEmail = email && isValidEmail(email);
-//       const hasValidPhone = phone && isValidPhone(phone);
-
-//       if (!hasValidEmail && !hasValidPhone) continue;
-
-//       const payload = { name };
-//       if (hasValidEmail) payload.email = email;
-//       if (hasValidPhone) payload.phone = phone;
-
-//       try {
-//         const apiRes = await axios.post(
-//           "http://localhost:3000/api/registerUser",
-//           payload
-//         );
-//         registeredUsers.push(apiRes.data);
-//       } catch (err) {
-//         console.error(`Failed to register ${name}: ${err.message}`);
-//       }
-//     }
-
-//     return res.json({
-//       message: "Bulk registration from local file completed",
-//       registeredCount: registeredUsers.length,
-//       registeredUsers,
-//     });
-//   } catch (err) {
-//     console.error("Bulk registration error:", err);
-//     return res
-//       .status(500)
-//       .json({ error: "Failed to process Excel file", details: err.message });
-//   }
-// });
-
-// Start server
-
 app.post("/register-bulk", async (req, res) => {
   const fileName = req.body.fileName || "DEMO.xlsx";
   const filePath = path.join(__dirname, fileName);
@@ -150,13 +89,9 @@ app.post("/register-bulk", async (req, res) => {
     const registeredUsers = [];
 
     for (const row of data) {
-      const name = row["name"] || row["Name"];
-      const email = row["email"] || row["Email"];
-      const phone =
-        row["phone"] ||
-        row["Phone"] ||
-        row["Phone Number"] ||
-        row["phone number"];
+      const name = row["Name"];
+      const email = row["Email"];
+      const phone = row["Phone"];
 
       if (!name) continue;
 
