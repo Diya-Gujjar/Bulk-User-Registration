@@ -5,9 +5,14 @@ const axios = require("axios");
 const xlsx = require("xlsx");
 const { v4: uuidv4 } = require("uuid");
 const crypto = require("crypto");
+const multer = require("multer");
+const cors = require("cors");
 
 const app = express();
+const upload = multer({ dest: "uploads/" });
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); 
+app.use(cors()); // Enable CORS for all routes
 
 /**
  * ========== MOCK EXISTING USER REGISTRATION API ==========
@@ -61,14 +66,12 @@ app.post("/api/registerUser", (req, res) => {
  * Accepts: JSON { "fileUrl": "https://..." }
  * Downloads Excel, parses users, calls /api/registerUser for each
  */
-
-app.post("/register-bulk", async (req, res) => {
-  const fileName = req.body.fileName || "DEMO.xlsx";
-  const filePath = path.join(__dirname, fileName);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(400).json({ error: `File not found: ${fileName}` });
+app.post("/register-bulk", upload.single("excelFile"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
   }
+
+  const filePath = req.file.path;
 
   try {
     const workbook = xlsx.readFile(filePath);
@@ -77,14 +80,10 @@ app.post("/register-bulk", async (req, res) => {
     const data = xlsx.utils.sheet_to_json(sheet);
 
     const now = new Date();
-    const timestamp = now
-      .toISOString()
-      .replace(/[-:]/g, "") // remove - and :
-      .replace(/\..+/, ""); // remove milliseconds part after dot
-
+    const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
     const randomStr = crypto.randomBytes(2).toString("hex");
-
     const outputFileName = `registered_users_${timestamp}_${randomStr}.xlsx`;
+    const outputFilePath = path.join(__dirname, outputFileName);
 
     const registeredUsers = [];
 
@@ -97,7 +96,6 @@ app.post("/register-bulk", async (req, res) => {
 
       const hasValidEmail = email && isValidEmail(email);
       const hasValidPhone = phone && isValidPhone(phone);
-
       if (!hasValidEmail && !hasValidPhone) continue;
 
       const payload = { name };
@@ -105,39 +103,44 @@ app.post("/register-bulk", async (req, res) => {
       if (hasValidPhone) payload.phone = phone;
 
       try {
-        const apiRes = await axios.post(
-          "http://localhost:3000/api/registerUser",
-          payload
-        );
+        const apiRes = await axios.post("http://localhost:3000/api/registerUser", payload);
         registeredUsers.push(apiRes.data);
       } catch (err) {
         console.error(`Failed to register ${name}: ${err.message}`);
       }
     }
 
-    // ✅ Prepare Excel data
     const exportData = registeredUsers.map((user) => ({
       name: user.name,
       userId: user.userId,
       email: user.email || "",
-      phone: user.phone ? `${user.phone}` : "",
+      phone: user.phone || "",
     }));
 
     const worksheet = xlsx.utils.json_to_sheet(exportData);
     const newWorkbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(newWorkbook, worksheet, "RegisteredUsers");
-
-    // const outputFilePath = path.join(__dirname, "registered_users.xlsx");
-    const outputFilePath = path.join(__dirname, outputFileName);
     xlsx.writeFile(newWorkbook, outputFilePath);
 
-    // ✅ Final JSON response
-    return res.json({
-      message: "Bulk registration from local file completed",
-      registeredCount: registeredUsers.length,
-      savedToFile: outputFileName,
-      registeredUsers,
-    });
+    // Cleanup uploaded file
+    fs.unlinkSync(filePath);
+
+    // return res.json({
+    //   message: "Bulk registration completed",
+    //   registeredCount: registeredUsers.length,
+    //   registeredUsers,
+    // });
+    // 👇 At the end of your /register-bulk route
+return res.download(outputFilePath, outputFileName, (err) => {
+  if (err) {
+    console.error("Download error:", err);
+    return res.status(500).json({ error: "File download failed" });
+  }
+
+  // Optionally delete the file after sending it
+  fs.unlink(outputFilePath, () => {});
+});
+
   } catch (err) {
     console.error("Bulk registration error:", err);
     return res.status(500).json({
